@@ -18,7 +18,7 @@ Users and projects are stored in MySQL. Tasks are stored in MongoDB with Mongoos
 ## Installation
 
 1. Install and start [MySQL 8](https://dev.mysql.com/downloads/installer/). During setup, note the host, port, user, and password. The account needs permission to create a database, or you can create `project_task_db` yourself before the setup script runs.
-2. Install and start [MongoDB Community Server](https://www.mongodb.com/try/download/community). On this machine the MongoDB Windows service is enough. The default URI has no username.
+2. Install and start [MongoDB Community Server](https://www.mongodb.com/try/download/community).The default URI has no username.
 3. Install dependencies:
 
 ```bash
