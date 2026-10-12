@@ -404,6 +404,3 @@ A rejected login means the user or password is wrong. A connection error means t
 | `pnpm start` | Start once |
 | `pnpm db:setup` | Apply `database/schema.sql` |
 
-## Project layout
-
-`CODEBASE.md` explains each folder, the request path, the auth flow, and why the data is split across two databases.
