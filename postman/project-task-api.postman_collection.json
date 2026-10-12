@@ -1,0 +1,886 @@
+{
+  "info": {
+    "name": "Project & Task Management API",
+    "description": "Run this collection from top to bottom with the Collection Runner. Register saves token and ownerEmail. Create project saves projectId. Create task saves taskId. The second user is stored in otherToken.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "" },
+    { "key": "otherToken", "value": "" },
+    { "key": "ownerEmail", "value": "" },
+    { "key": "otherEmail", "value": "" },
+    { "key": "projectId", "value": "" },
+    { "key": "taskId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Health and auth",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('both databases are up', function () {",
+                  "  pm.expect(body.data.mysql).to.eql('up');",
+                  "  pm.expect(body.data.mongo).to.eql('up');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register validation error",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A\",\n  \"email\": \"not-an-email\",\n  \"password\": \"short\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 400', function () { pm.response.to.have.status(400); });",
+                  "const body = pm.response.json();",
+                  "pm.test('returns field errors', function () {",
+                  "  pm.expect(body.success).to.eql(false);",
+                  "  pm.expect(body.errors.length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register owner",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Asha Rao\",\n  \"email\": \"asha.{{$timestamp}}@example.com\",\n  \"password\": \"Password1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "pm.test('returns a token and hides the password', function () {",
+                  "  pm.expect(body.data.token).to.be.a('string');",
+                  "  pm.expect(body.data.user.password).to.eql(undefined);",
+                  "  pm.expect(body.data.user.passwordHash).to.eql(undefined);",
+                  "});",
+                  "pm.collectionVariables.set('token', body.data.token);",
+                  "pm.collectionVariables.set('ownerEmail', body.data.user.email);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register duplicate email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Asha Rao\",\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"Password1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login bad password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"wrong-password\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('message hides which field was wrong', function () {",
+                  "  pm.expect(pm.response.json().message).to.eql('Invalid email or password');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login owner",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"Password1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.set('token', pm.response.json().data.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me without token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('email matches the owner', function () {",
+                  "  pm.expect(pm.response.json().data.email).to.eql(pm.collectionVariables.get('ownerEmail'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Asha R.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/profile"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('name changed', function () {",
+                  "  pm.expect(pm.response.json().data.name).to.eql('Asha R.');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Projects",
+      "item": [
+        {
+          "name": "Create project validation error",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"   \",\n  \"status\": \"paused\"\n}" },
+            "url": "{{baseUrl}}/api/projects"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 400', function () { pm.response.to.have.status(400); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create project",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Album launch\",\n  \"description\": \"Ship the first single\",\n  \"status\": \"active\"\n}"
+            },
+            "url": "{{baseUrl}}/api/projects"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const project = pm.response.json().data;",
+                  "pm.test('owner is the caller', function () {",
+                  "  pm.expect(project.userId).to.be.a('number');",
+                  "  pm.expect(project.status).to.eql('active');",
+                  "});",
+                  "pm.collectionVariables.set('projectId', String(project.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List projects",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/projects"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('list includes the new project', function () {",
+                  "  const ids = pm.response.json().data.map(function (project) { return String(project.id); });",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get('projectId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get project",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/projects/{{projectId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get project bad id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/projects/abc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 400', function () { pm.response.to.have.status(400); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update project",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"completed\"\n}" },
+            "url": "{{baseUrl}}/api/projects/{{projectId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('status is completed', function () {",
+                  "  pm.expect(pm.response.json().data.status).to.eql('completed');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register other user",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Other User\",\n  \"email\": \"other.{{$timestamp}}@example.com\",\n  \"password\": \"Password1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('otherToken', body.data.token);",
+                  "pm.collectionVariables.set('otherEmail', body.data.user.email);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get someone else's project",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{otherToken}}" }],
+            "url": "{{baseUrl}}/api/projects/{{projectId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Profile email taken by the other user",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{otherEmail}}\"\n}" },
+            "url": "{{baseUrl}}/api/auth/profile"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 409', function () { pm.response.to.have.status(409); });"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Tasks",
+      "item": [
+        {
+          "name": "Create task validation error",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"\",\n  \"priority\": \"urgent\"\n}" },
+            "url": "{{baseUrl}}/api/tasks"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 400', function () { pm.response.to.have.status(400); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create task on someone else's project",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{otherToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Should fail\",\n  \"projectId\": {{projectId}},\n  \"priority\": \"high\"\n}"
+            },
+            "url": "{{baseUrl}}/api/tasks"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 404', function () { pm.response.to.have.status(404); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create high todo task",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Write liner notes\",\n  \"description\": \"Short bio and credits\",\n  \"status\": \"todo\",\n  \"priority\": \"high\",\n  \"projectId\": {{projectId}},\n  \"dueDate\": \"2026-11-01T00:00:00.000Z\"\n}"
+            },
+            "url": "{{baseUrl}}/api/tasks"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () { pm.response.to.have.status(201); });",
+                  "const task = pm.response.json().data;",
+                  "pm.test('task is linked to the project and owner', function () {",
+                  "  pm.expect(task.projectId).to.eql(Number(pm.collectionVariables.get('projectId')));",
+                  "  pm.expect(task.priority).to.eql('high');",
+                  "  pm.expect(task.ownerId).to.be.a('number');",
+                  "});",
+                  "pm.collectionVariables.set('taskId', task.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create low completed task",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Archive stems\",\n  \"status\": \"completed\",\n  \"priority\": \"low\",\n  \"projectId\": {{projectId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/tasks"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 201', function () { pm.response.to.have.status(201); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List tasks",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks?page=1&limit=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('pagination is present', function () {",
+                  "  pm.expect(body.pagination.totalRecords).to.be.at.least(2);",
+                  "  pm.expect(body.pagination.totalPages).to.be.at.least(1);",
+                  "  pm.expect(body.pagination.page).to.eql(1);",
+                  "  pm.expect(body.pagination.limit).to.eql(10);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter high todo tasks",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks?page=1&limit=10&status=todo&priority=high&projectId={{projectId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('only high todo tasks are returned', function () {",
+                  "  const tasks = pm.response.json().data;",
+                  "  pm.expect(tasks.length).to.be.at.least(1);",
+                  "  tasks.forEach(function (task) {",
+                  "    pm.expect(task.status).to.eql('todo');",
+                  "    pm.expect(task.priority).to.eql('high');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bad pagination",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks?page=0&limit=500"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 400', function () { pm.response.to.have.status(400); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by someone else's project",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{otherToken}}" }],
+            "url": "{{baseUrl}}/api/tasks?projectId={{projectId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 404', function () { pm.response.to.have.status(404); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get task",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get task bad id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks/not-an-id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 400', function () { pm.response.to.have.status(400); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get someone else's task",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{otherToken}}" }],
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 404', function () { pm.response.to.have.status(404); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update task",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"in_progress\"\n}" },
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('status is in_progress', function () {",
+                  "  pm.expect(pm.response.json().data.status).to.eql('in_progress');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tasks without token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tasks"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 401', function () { pm.response.to.have.status(401); });"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Dashboard and cleanup",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/dashboard"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "const stats = pm.response.json().data;",
+                  "pm.test('stats include the created records', function () {",
+                  "  pm.expect(stats.totalProjects).to.be.at.least(1);",
+                  "  pm.expect(stats.completedProjects).to.be.at.least(1);",
+                  "  pm.expect(stats.totalTasks).to.be.at.least(2);",
+                  "  pm.expect(stats.pendingTasks).to.be.at.least(1);",
+                  "  pm.expect(stats.completedTasks).to.be.at.least(1);",
+                  "  pm.expect(stats.highPriorityTasks).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dashboard without token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/dashboard"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 401', function () { pm.response.to.have.status(401); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown route",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/does-not-exist"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('route not found', function () {",
+                  "  pm.expect(pm.response.json().message).to.eql('Route not found');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete task",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete project",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/projects/{{projectId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get deleted project",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/projects/{{projectId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 404', function () { pm.response.to.have.status(404); });"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deleted project's tasks are gone",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks?projectId={{projectId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('missing project is 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
